@@ -403,13 +403,17 @@
         return res;
       },[]);
 
-      // Auto-scroll to today on mount
+      // Auto-scroll to today on mount — use getBoundingClientRect so
+      // it works regardless of how many month sections come before
       useEffect(()=>{
         requestAnimationFrame(()=>{
           const el=scrollRef.current;
           if(!el)return;
           const marker=el.querySelector('[data-scroll-here]');
-          if(marker) el.scrollTop=Math.max(0,marker.offsetTop-CELL_H/2);
+          if(!marker)return;
+          const elTop=el.getBoundingClientRect().top;
+          const mTop=marker.getBoundingClientRect().top;
+          el.scrollTop=Math.max(0,el.scrollTop+(mTop-elTop)-CELL_H);
         });
       },[]);
 
@@ -498,7 +502,8 @@
               <div key={`${year}-${month}`} style={{position:"relative"}}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
                   {cells.map((c,i)=>{
-                    if(c.blank)return<div key={i} style={{...cellBase,background:"#fff"}}/>;
+                    const isScrollAnchor=isCur&&i===todayRowStart;
+                    if(c.blank)return<div key={i} data-scroll-here={isScrollAnchor?"1":undefined} style={{...cellBase,background:"#fff"}}/>;
                     const isToday=isCur&&c.day===now.getDate();
                     const isFirstOfMonth=c.day===1;
                     const evs=(isCur?calendarEvents[c.day]:[])||[];
@@ -506,8 +511,6 @@
                     const needsBal=showBal(isCur,c.day,evs,c.col);
                     const balVal=isCur?runBal[c.day]:null;
                     const noTxToday=isCur&&isToday&&evs.length===0;
-                    // Mark first cell of today's row for auto-scroll
-                    const isScrollAnchor=isCur&&i===todayRowStart;
                     const borderC=(e)=>{const isInc=e.amt>0;return isInc?"#4ade80":e.color?.includes("rose")?"#f87171":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#c084fc":e.color?.includes("sky")?"#38bdf8":"#94a3b8";};
                     const bgC=(e)=>{const isInc=e.amt>0;return isInc?"#f0fdf4":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fefce8":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc";};
                     return(
