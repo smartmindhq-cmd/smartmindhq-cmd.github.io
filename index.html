@@ -272,7 +272,7 @@
     function DockBtn({active,onClick,label,children}){return<button onClick={onClick} aria-label={label} className={cx("grid h-12 w-12 place-items-center rounded-full transition active:scale-90",active?"text-[#5b7cfa]":"text-slate-800")}>{children}</button>;}
     function DockNav({active,onSelect,onAdd,addOpen,visible=true}){
       return(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:20,display:"flex",justifyContent:"center",paddingBottom:"env(safe-area-inset-bottom,0px)",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(120%)",opacity:visible?1:0,transition:"transform 0.32s cubic-bezier(0.4,0,0.2,1),opacity 0.32s ease"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:40,display:"flex",justifyContent:"center",paddingBottom:"max(env(safe-area-inset-bottom,0px),6px)",paddingTop:"6px",background:"transparent",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(130%)",opacity:visible?1:0,transition:"transform 0.3s cubic-bezier(0.4,0,0.2,1),opacity 0.3s ease"}}>
           <div className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-1 ring-black/6 pointer-events-auto" style={{width:"88%",maxWidth:"360px"}}>
             <DockBtn label="calendar" active={active==="home"} onClick={()=>onSelect("home")}><CalendarIcon/></DockBtn>
             <DockBtn label="history" active={active==="history"} onClick={()=>onSelect("history")}><ClockIcon/></DockBtn>
@@ -372,152 +372,177 @@
     }
 
     // ── CalendarLive ──────────────────────────────────────
+    const MONTH_SHORT=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     function CalendarLive({openMenu,openCash,openInsights,openWeather,onDayTap,today="$0",balanceDisplay="$0",userName="",calendarEvents={},onScrollDir}){
       const dows=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
       const now=new Date();
       const scrollRef=useRef(null);
       const lastTop=useRef(0);
-      const todayRowRef=useRef(null);
-      const CELL_H=90;
+      const CELL_H=96;
 
-      // Auto-scroll to today's row on first render
-      useEffect(()=>{
-        if(scrollRef.current&&todayRowRef.current){
-          const offset=todayRowRef.current.offsetTop;
-          scrollRef.current.scrollTop=Math.max(0,offset-CELL_H);
-        }
-      },[]);
-
-      // Running balance per day (current month only)
-      const dayBalances=useMemo(()=>{
+      // Running balance carried day-by-day
+      const runBal=useMemo(()=>{
         const BASE=7500;
         let bal=BASE;
         const map={};
         for(let d=1;d<=31;d++){
-          const evs=calendarEvents[d]||[];
-          evs.forEach(e=>{bal+=e.amt;});
-          if(evs.length>0) map[d]=bal;
+          (calendarEvents[d]||[]).forEach(e=>{bal+=e.amt;});
+          map[d]=Math.round(bal);
         }
         return map;
       },[calendarEvents]);
 
-      const fmtBal=v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${Math.round(v)}`;
-
-      // Budget helper text for Sundays (index 6 in Mon=0 scheme)
-      const budgetLabel=(dowIdx,day,dim)=>{
-        if(dowIdx!==6)return null;
-        const isLast=day+7>dim;
-        const isFirst=day<=7;
-        if(isLast||(!isFirst&&Math.floor(day/7)%2===0))return"Budget end";
-        return"Budget start";
-      };
+      const fmtBal=v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v}`;
 
       const months=useMemo(()=>{
         const res=[];
-        for(let i=-1;i<14;i++){
+        for(let i=-1;i<15;i++){
           const d=new Date(now.getFullYear(),now.getMonth()+i,1);
           res.push({year:d.getFullYear(),month:d.getMonth()});
         }
         return res;
       },[]);
 
+      // Auto-scroll to today on mount
+      useEffect(()=>{
+        requestAnimationFrame(()=>{
+          const el=scrollRef.current;
+          if(!el)return;
+          const marker=el.querySelector('[data-scroll-here]');
+          if(marker) el.scrollTop=Math.max(0,marker.offsetTop-CELL_H/2);
+        });
+      },[]);
+
       const handleScroll=()=>{
         const el=scrollRef.current;if(!el)return;
         const st=el.scrollTop;
-        if(Math.abs(st-lastTop.current)>6){
+        if(Math.abs(st-lastTop.current)>8){
           onScrollDir?.(st>lastTop.current?"up":"down");
           lastTop.current=st;
         }
       };
 
-      const S={
-        cell:{borderBottom:"1px solid #f0f0f0",borderRight:"1px solid #f0f0f0",minHeight:`${CELL_H}px`,padding:"4px 3px",textAlign:"left",background:"#fff",display:"block",width:"100%",verticalAlign:"top",overflow:"hidden"},
-        blank:{borderBottom:"1px solid #f0f0f0",borderRight:"1px solid #f0f0f0",minHeight:`${CELL_H}px`,background:"#fff"},
+      // Budget label for sunday cells (dowIdx 6)
+      const getBudget=(dowIdx,day,dim)=>{
+        if(dowIdx!==6)return null;
+        const wk=Math.ceil(day/7);
+        const isLast=day+7>dim;
+        if(isLast)return{line1:"Budget end",line2:null,line3:null};
+        if(wk%2===0)return{line1:"Budget end",line2:"Set budget",line3:"Remaining $0"};
+        return{line1:"Budget start",line2:"Set budget",line3:null};
       };
 
+      // Show balance: on event days, Sat, Sun, today
+      const showBal=(isCur,day,evs,dowIdx)=>{
+        if(!isCur)return false;
+        return evs.length>0||dowIdx===5||dowIdx===6;
+      };
+
+      const BD="1px solid #efefef";
+      const cellBase={borderBottom:BD,borderRight:BD,minHeight:`${CELL_H}px`,padding:"5px 4px 3px",textAlign:"left",background:"#fff",display:"block",width:"100%",overflow:"hidden",boxSizing:"border-box"};
+
       return(<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",background:"#fff"}}>
-        {/* Top bar */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px 4px",paddingTop:"calc(env(safe-area-inset-top,0px) + 10px)"}}>
-          <div style={{display:"flex",gap:"6px"}}>
-            <button onClick={openMenu} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9"}}><MenuIcon/></button>
-            <div style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#64748b"}}><ChatIcon/></div>
+
+        {/* ── Top Bar ── */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`calc(env(safe-area-inset-top,0px) + 8px) 10px 6px`}}>
+          <div style={{display:"flex",gap:"5px"}}>
+            <button onClick={openMenu} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#1e293b"}}><MenuIcon/></button>
+            <button style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#64748b"}}><ChatIcon/></button>
           </div>
-          <button onClick={openCash} style={{borderRadius:"999px",background:"#f1f5f9",padding:"6px 18px",textAlign:"center"}}>
-            <div style={{fontSize:"18px",fontWeight:"800",lineHeight:"1.1",color:"#0f172a"}}>{today}</div>
-            <div style={{fontSize:"10px",fontWeight:"600",color:"#94a3b8",lineHeight:"1"}}>Updated 3 days ago</div>
+          <button onClick={openCash} style={{borderRadius:"999px",background:"#f4f4f5",padding:"5px 20px",textAlign:"center",lineHeight:"1"}}>
+            <div style={{fontSize:"19px",fontWeight:"800",color:"#0f172a"}}>{today}</div>
+            <div style={{fontSize:"10px",fontWeight:"500",color:"#94a3b8",marginTop:"1px"}}>Updated 3 days ago</div>
           </button>
-          <div style={{display:"flex",gap:"6px"}}>
-            <button onClick={openInsights} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#64748b"}}><BarsIcon/></button>
-            <button onClick={openWeather} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#94a3b8"}}><TrophyIcon/></button>
+          <div style={{display:"flex",gap:"5px"}}>
+            <button onClick={openInsights} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#64748b"}}><BarsIcon/></button>
+            <button onClick={openWeather} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#94a3b8"}}><TrophyIcon/></button>
           </div>
         </div>
-        {/* Weather banner */}
-        <div style={{margin:"0 10px 6px",display:"flex",alignItems:"center",gap:"8px",borderRadius:"16px",borderLeft:"4px solid #10b981",background:"#ecfdf5",padding:"8px 10px"}}>
-          <span style={{fontSize:"20px"}}>☀️</span>
+
+        {/* ── Clear Skies Banner ── */}
+        <div style={{margin:"0 10px 5px",borderRadius:"14px",borderLeft:"4px solid #22c55e",background:"#f0fdf4",padding:"7px 10px",display:"flex",alignItems:"flex-start",gap:"8px"}}>
+          <span style={{fontSize:"18px",lineHeight:"1.2"}}>☀️</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:"12px",fontWeight:"800",color:"#059669"}}>Clear Skies</span>
-              <button onClick={openWeather} style={{borderRadius:"999px",background:"#d1fae5",padding:"2px 8px",fontSize:"10px",fontWeight:"600",color:"#065f46"}}>Edit</button>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"2px"}}>
+              <span style={{fontSize:"12px",fontWeight:"700",color:"#16a34a"}}>Clear Skies</span>
+              <button onClick={openWeather} style={{borderRadius:"999px",background:"#dcfce7",padding:"2px 10px",fontSize:"10px",fontWeight:"600",color:"#15803d",flexShrink:0}}>Edit</button>
             </div>
-            <p style={{fontSize:"11px",color:"#047857",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>After 🏠 Rent + 1 expense on Jun 3, you'll have <b>{today}</b> left</p>
+            <p style={{margin:0,fontSize:"11px",color:"#15803d",lineHeight:"1.35",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>After 🏠 Rent + 1 expense on Jun 3, you'll have <b>$6k</b> left</p>
           </div>
         </div>
-        {/* Day headers */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e2e8f0"}}>
-          {dows.map(d=><div key={d} style={{padding:"5px 0",textAlign:"center",fontSize:"11px",fontWeight:"600",color:"#94a3b8"}}>{d}</div>)}
+
+        {/* ── Day-of-week headers ── */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e8e8e8"}}>
+          {dows.map(d=><div key={d} style={{padding:"4px 0",textAlign:"center",fontSize:"11px",fontWeight:"600",color:"#9ca3af"}}>{d}</div>)}
         </div>
-        {/* Calendar scroll */}
-        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 90px)"}} onScroll={handleScroll}>
-          {months.map(({year,month})=>{
+
+        {/* ── Scrollable calendar ── */}
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 92px)"}} onScroll={handleScroll}>
+          {months.map(({year,month},mi)=>{
             const isCur=now.getFullYear()===year&&now.getMonth()===month;
             const firstDay=(new Date(year,month,1).getDay()+6)%7;
             const dim=new Date(year,month+1,0).getDate();
             const label=new Date(year,month,1).toLocaleString("default",{month:"long",year:"numeric"});
             const cells=[];
             for(let i=0;i<firstDay;i++)cells.push({blank:true});
-            for(let d=1;d<=dim;d++)cells.push({day:d,dowIdx:(firstDay+d-1)%7});
-            // Find which row-index today is in (for scroll ref)
-            const todayRowIdx=isCur?Math.floor((firstDay+now.getDate()-1)/7):null;
+            for(let d=1;d<=dim;d++){
+              const col=(firstDay+d-1)%7;
+              cells.push({day:d,col});
+            }
+            // Today's row index inside this month section (for auto-scroll)
+            const todayCol=(firstDay+now.getDate()-1)%7;
+            const todayAbsIdx=firstDay+now.getDate()-1;
+            const todayRowStart=Math.floor(todayAbsIdx/7)*7;
+
             return(
               <div key={`${year}-${month}`} style={{position:"relative"}}>
-                {/* Grid */}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
                   {cells.map((c,i)=>{
-                    if(c.blank)return<div key={i} style={S.blank}/>;
-                    const rowIdx=Math.floor(i/7);
+                    if(c.blank)return<div key={i} style={{...cellBase,background:"#fff"}}/>;
                     const isToday=isCur&&c.day===now.getDate();
+                    const isFirstOfMonth=c.day===1;
                     const evs=(isCur?calendarEvents[c.day]:[])||[];
-                    const bal=isCur&&dayBalances[c.day]!=null?dayBalances[c.day]:null;
-                    const bLabel=budgetLabel(c.dowIdx,c.day,dim);
-                    const rowRef=(rowIdx===todayRowIdx)?{ref:todayRowRef}:{};
+                    const budget=getBudget(c.col,c.day,dim);
+                    const needsBal=showBal(isCur,c.day,evs,c.col);
+                    const balVal=isCur?runBal[c.day]:null;
+                    const noTxToday=isCur&&isToday&&evs.length===0;
+                    // Mark first cell of today's row for auto-scroll
+                    const isScrollAnchor=isCur&&i===todayRowStart;
+                    const borderC=(e)=>{const isInc=e.amt>0;return isInc?"#4ade80":e.color?.includes("rose")?"#f87171":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#c084fc":e.color?.includes("sky")?"#38bdf8":"#94a3b8";};
+                    const bgC=(e)=>{const isInc=e.amt>0;return isInc?"#f0fdf4":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fefce8":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc";};
                     return(
-                      <button key={i} {...rowRef} onClick={()=>onDayTap?.(month,c.day)} style={S.cell}>
-                        <span style={{display:"inline-grid",placeItems:"center",height:"24px",width:"24px",borderRadius:"50%",fontSize:"12px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#1e293b"}}>{c.day}</span>
-                        {bal!==null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.2",marginTop:"1px"}}>{fmtBal(bal)}</div>}
+                      <button key={i} data-scroll-here={isScrollAnchor?"1":undefined} onClick={()=>onDayTap?.(month,c.day)} style={cellBase}>
+                        {/* Month name on first day of new month */}
+                        {isFirstOfMonth&&mi>0&&<div style={{fontSize:"8px",fontWeight:"600",color:"#94a3b8",lineHeight:"1",marginBottom:"1px"}}>{MONTH_SHORT[month]}</div>}
+                        {/* Day number */}
+                        <span style={{display:"inline-grid",placeItems:"center",height:"22px",width:"22px",borderRadius:"50%",fontSize:"12px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#111827",flexShrink:0}}>{c.day}</span>
+                        {/* Balance */}
+                        {noTxToday&&<div style={{fontSize:"9px",color:"#9ca3af",lineHeight:"1.3",marginTop:"1px"}}>$0</div>}
+                        {!noTxToday&&needsBal&&balVal!=null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.3",marginTop:"1px"}}>{fmtBal(balVal)}</div>}
+                        {/* Event cards */}
                         <div style={{display:"flex",flexDirection:"column",gap:"2px",marginTop:"2px"}}>
-                          {evs.slice(0,2).map((e,ki)=>{
-                            const isInc=e.amt>0;
-                            const borderC=isInc?"#34d399":e.color?.includes("rose")?"#fb7185":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#a78bfa":e.color?.includes("sky")?"#38bdf8":"#94a3b8";
-                            const bgC=isInc?"#ecfdf5":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fffbeb":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc";
-                            return(<div key={ki} style={{borderRadius:"3px",borderLeft:`2px solid ${borderC}`,background:bgC,padding:"1px 3px"}}>
-                              <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.3",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.emoji} {e.label}</div>
-                              <div style={{fontSize:"8px",fontWeight:"700",color:isInc?"#16a34a":"#e11d48",lineHeight:"1"}}>{isInc?"+":""}{fmt(Math.abs(e.amt))}</div>
-                            </div>);
-                          })}
-                          {evs.length>2&&<div style={{fontSize:"7px",color:"#94a3b8"}}>+{evs.length-2}</div>}
+                          {evs.slice(0,2).map((e,ki)=>(
+                            <div key={ki} style={{borderRadius:"4px",borderLeft:`2px solid ${borderC(e)}`,background:bgC(e),padding:"2px 3px",overflow:"hidden"}}>
+                              <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.3",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.emoji} {e.label}</div>
+                              <div style={{fontSize:"8px",fontWeight:"700",lineHeight:"1",color:e.amt>0?"#16a34a":"#ef4444"}}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div>
+                            </div>
+                          ))}
+                          {evs.length>2&&<div style={{fontSize:"7px",color:"#9ca3af"}}>+{evs.length-2}</div>}
                         </div>
-                        {bLabel&&evs.length===0&&<div style={{marginTop:"auto",paddingTop:"4px"}}>
-                          <div style={{fontSize:"7px",color:"#94a3b8",lineHeight:"1.4"}}>{bLabel}</div>
-                          {bLabel==="Budget start"&&<div style={{fontSize:"7px",color:"#3b82f6",lineHeight:"1.4"}}>Set budget</div>}
+                        {/* Budget text on Sundays */}
+                        {budget&&<div style={{marginTop:"3px"}}>
+                          <div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.5"}}>{budget.line1}</div>
+                          {budget.line2&&<div style={{fontSize:"7px",color:"#6b7280",lineHeight:"1.5"}}>{budget.line2}</div>}
+                          {budget.line3&&<div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.5"}}>{budget.line3}</div>}
                         </div>}
                       </button>
                     );
                   })}
                 </div>
-                {/* Month label floating over first row, centered */}
-                <div style={{position:"absolute",top:`${CELL_H/2}px`,left:"50%",transform:"translate(-50%,-50%)",zIndex:5,pointerEvents:"none",display:"flex",alignItems:"center",gap:"4px",background:"rgba(255,255,255,0.96)",borderRadius:"999px",padding:"4px 16px",boxShadow:"0 2px 12px rgba(0,0,0,0.13)",whiteSpace:"nowrap"}}>
-                  <span style={{fontSize:"13px",fontWeight:"700",color:"#334155"}}>{label}</span>
-                  <span style={{fontSize:"12px",color:"#94a3b8"}}>▾</span>
+                {/* Floating month label — centered on first row */}
+                <div style={{position:"absolute",top:`${CELL_H/2}px`,left:"50%",transform:"translate(-50%,-50%)",zIndex:4,pointerEvents:"none",display:"flex",alignItems:"center",gap:"4px",background:"rgba(255,255,255,0.97)",borderRadius:"999px",padding:"5px 16px",boxShadow:"0 1px 10px rgba(0,0,0,0.12)",whiteSpace:"nowrap"}}>
+                  <span style={{fontSize:"13px",fontWeight:"700",color:"#374151"}}>{label}</span>
+                  <span style={{fontSize:"11px",color:"#9ca3af"}}>▾</span>
                 </div>
               </div>
             );
