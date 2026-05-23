@@ -43,7 +43,7 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     html,body,#root{
       height:100%;height:-webkit-fill-available;width:100%;overflow:hidden;
-      background:#ffffff;
+      background:#000000;
       font-family:-apple-system,BlinkMacSystemFont,'Inter',system-ui,sans-serif;
       -webkit-font-smoothing:antialiased;
       overscroll-behavior:none;
@@ -272,7 +272,7 @@
     function DockBtn({active,onClick,label,children}){return<button onClick={onClick} aria-label={label} className={cx("grid h-12 w-12 place-items-center rounded-full transition active:scale-90",active?"text-[#5b7cfa]":"text-slate-800")}>{children}</button>;}
     function DockNav({active,onSelect,onAdd,addOpen,visible=true}){
       return(
-        <div className="absolute bottom-0 left-0 right-0 z-20 flex justify-center pointer-events-none" style={{paddingBottom:"0px",transform:visible?"translateY(0)":"translateY(120%)",opacity:visible?1:0,transition:"transform 0.32s cubic-bezier(0.4,0,0.2,1),opacity 0.32s ease"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:20,display:"flex",justifyContent:"center",paddingBottom:"env(safe-area-inset-bottom,0px)",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(120%)",opacity:visible?1:0,transition:"transform 0.32s cubic-bezier(0.4,0,0.2,1),opacity 0.32s ease"}}>
           <div className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-1 ring-black/6 pointer-events-auto" style={{width:"88%",maxWidth:"360px"}}>
             <DockBtn label="calendar" active={active==="home"} onClick={()=>onSelect("home")}><CalendarIcon/></DockBtn>
             <DockBtn label="insights" active={active==="insights"} onClick={()=>onSelect("insights")}><PieIcon/></DockBtn>
