@@ -272,8 +272,8 @@
     function DockBtn({active,onClick,label,children}){return<button onClick={onClick} aria-label={label} className={cx("grid h-12 w-12 place-items-center rounded-full transition active:scale-90",active?"text-[#5b7cfa]":"text-slate-800")}>{children}</button>;}
     function DockNav({active,onSelect,onAdd,addOpen,visible=true}){
       return(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:40,display:"flex",justifyContent:"center",paddingBottom:"max(env(safe-area-inset-bottom,0px),6px)",paddingTop:"6px",background:"transparent",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(130%)",opacity:visible?1:0,transition:"transform 0.3s cubic-bezier(0.4,0,0.2,1),opacity 0.3s ease"}}>
-          <div className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-1 ring-black/6 pointer-events-auto" style={{width:"88%",maxWidth:"360px"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:40,display:"flex",justifyContent:"center",alignItems:"flex-end",paddingBottom:"0px",paddingTop:"0px",background:"transparent",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(130%)",opacity:visible?1:0,transition:"transform 0.3s cubic-bezier(0.4,0,0.2,1),opacity 0.3s ease"}}>
+          <div className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-1 ring-black/6 pointer-events-auto" style={{width:"88%",maxWidth:"360px",marginBottom:"max(env(safe-area-inset-bottom,8px),8px)"}}>
             <DockBtn label="calendar" active={active==="home"} onClick={()=>onSelect("home")}><CalendarIcon/></DockBtn>
             <DockBtn label="history" active={active==="history"} onClick={()=>onSelect("history")}><ClockIcon/></DockBtn>
             <button onClick={onAdd} aria-label="Add" className="mx-1 grid h-14 w-14 place-items-center rounded-full bg-[#5b7cfa] text-white shadow-lg active:scale-90" style={{transition:"transform 0.25s cubic-bezier(0.34,1.56,0.64,1)",transform:addOpen?"rotate(45deg)":"rotate(0deg)"}}><PlusIcon/></button>
@@ -468,7 +468,7 @@
         </div>
 
         {/* CALENDAR SCROLL AREA */}
-        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 90px)"}} onScroll={handleScroll}>
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,8px) + 76px)"}} onScroll={handleScroll}>
           {months.map(({year,month},mi)=>{
             const isCur=year===now.getFullYear()&&month===now.getMonth();
             const fd=(new Date(year,month,1).getDay()+6)%7; // blanks before day 1
