@@ -421,10 +421,10 @@
             <p className="text-[11px] font-medium text-emerald-700 truncate">{userName?"Hey "+userName+"! ":""}Balance: <b>{balanceDisplay}</b></p>
           </div>
         </div>
-        <div className="grid grid-cols-7 border-b border-t border-slate-100 bg-white">
-          {dows.map(d=><div key={d} className="py-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">{d}</div>)}
+        <div className="grid grid-cols-7 bg-white" style={{borderBottom:"1px solid #e2e8f0"}}>
+          {dows.map(d=><div key={d} className="py-1.5 text-center text-[11px] font-semibold text-slate-400">{d}</div>)}
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 80px)"}} onScroll={handleScroll}>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{paddingBottom:"80px"}} onScroll={handleScroll}>
           {months.map(({year,month})=>{
             const isCur=now.getFullYear()===year&&now.getMonth()===month;
             const firstDay=(new Date(year,month,1).getDay()+6)%7;
@@ -434,19 +434,22 @@
             for(let i=0;i<firstDay;i++)cells.push({blank:true});
             for(let d=1;d<=daysInMonth;d++)cells.push({day:d});
             return(<div key={`${year}-${month}`}>
-              <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">{label}</span>
+              <div className="flex justify-center items-center py-2" style={{borderBottom:"1px solid #e2e8f0"}}>
+                <div className="flex items-center gap-1 rounded-full px-4 py-1" style={{background:"#f1f5f9"}}>
+                  <span className="text-sm font-bold text-slate-700">{label}</span>
+                  <span className="text-slate-400 text-xs ml-0.5">▾</span>
+                </div>
               </div>
               <div className="grid grid-cols-7">
                 {cells.map((c,i)=>{
-                  if(c.blank)return<div key={i} className="border-b border-r border-slate-100 min-h-[68px]"/>;
+                  if(c.blank)return<div key={i} style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"90px"}}/>;
                   const liveEvs=(isCur?calendarEvents[c.day]:[])||[];
                   const isToday=isCur&&c.day===now.getDate();
-                  return(<button key={i} onClick={()=>onDayTap?.(month,c.day)} className="border-b border-r border-slate-100 p-1 text-left align-top overflow-hidden min-h-[68px] transition active:bg-slate-50">
-                    <span className={cx("grid h-6 w-6 place-items-center rounded-full text-xs font-bold",isToday?"bg-blue-500 text-white":"text-slate-800")}>{c.day}</span>
+                  return(<button key={i} onClick={()=>onDayTap?.(month,c.day)} className="p-1 text-left align-top overflow-hidden transition active:bg-slate-50" style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"90px"}}>
+                    <span className={cx("grid h-7 w-7 place-items-center rounded-full text-sm font-bold",isToday?"bg-blue-500 text-white":"text-slate-800")}>{c.day}</span>
                     <div className="mt-0.5 space-y-0.5">
-                      {liveEvs.slice(0,2).map((e,ki)=>(<div key={ki} className={cx("rounded border-l-2 px-1 py-0.5",e.color)}><div className="truncate text-[8px] font-bold text-slate-800">{e.emoji} {e.label}</div></div>))}
-                      {liveEvs.length>2&&<div className="text-[7px] text-slate-400 pl-0.5">+{liveEvs.length-2}</div>}
+                      {liveEvs.slice(0,3).map((e,ki)=>(<div key={ki} className={cx("rounded border-l-2 px-1 py-0.5",e.color)}><div className="truncate text-[8px] font-semibold text-slate-800 leading-tight">{e.emoji} {e.label}</div><div className={cx("text-[8px] font-bold leading-none",e.amt>0?"text-emerald-600":"text-rose-500")}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div></div>))}
+                      {liveEvs.length>3&&<div className="text-[7px] text-slate-400 pl-0.5">+{liveEvs.length-3}</div>}
                     </div>
                   </button>);
                 })}
