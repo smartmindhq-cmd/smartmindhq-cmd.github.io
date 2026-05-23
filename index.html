@@ -43,7 +43,7 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     html,body,#root{
       height:100%;height:-webkit-fill-available;width:100%;overflow:hidden;
-      background:#000000;
+      background:#ffffff;
       font-family:-apple-system,BlinkMacSystemFont,'Inter',system-ui,sans-serif;
       -webkit-font-smoothing:antialiased;
       overscroll-behavior:none;
@@ -378,9 +378,26 @@
       const scrollRef=useRef(null);
       const lastTop=useRef(0);
 
+      // Running balance per day for current month
+      const dayBalances=useMemo(()=>{
+        const BASE=7500;
+        let bal=BASE;
+        const map={};
+        for(let d=1;d<=31;d++){
+          const evs=calendarEvents[d]||[];
+          if(evs.length>0){
+            evs.forEach(e=>{bal+=e.amt;});
+            map[d]=bal;
+          }
+        }
+        return map;
+      },[calendarEvents]);
+
+      const fmtBal=v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${Math.round(v)}`;
+
       const months=useMemo(()=>{
         const result=[];
-        for(let i=0;i<28;i++){
+        for(let i=0;i<12;i++){
           const d=new Date(now.getFullYear(),now.getMonth()+i,1);
           result.push({year:d.getFullYear(),month:d.getMonth()});
         }
@@ -396,35 +413,42 @@
         }
       };
 
-      return(<div className="flex h-full flex-col bg-white">
-        <div className="flex items-center justify-between px-3 pb-1 text-slate-900" style={{paddingTop:"calc(env(safe-area-inset-top,0px) + 10px)"}}>
+      return(<div className="bg-white" style={{position:"absolute",inset:0,display:"flex",flexDirection:"column"}}>
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-3 pb-1" style={{paddingTop:"calc(env(safe-area-inset-top,0px) + 10px)"}}>
           <div className="flex gap-1.5">
-            <button onClick={openMenu} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-900 transition active:scale-90"><MenuIcon/></button>
+            <button onClick={openMenu} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 active:scale-90"><MenuIcon/></button>
             <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500"><ChatIcon/></div>
           </div>
-          <button onClick={openCash} className="rounded-full bg-slate-100 px-4 py-1 text-center transition active:scale-95">
+          <button onClick={openCash} className="rounded-full bg-slate-100 px-4 py-1.5 text-center active:scale-95">
             <div className="text-lg font-extrabold leading-none text-slate-900">{today}</div>
-            <div className="text-[10px] font-semibold text-slate-500">tap for breakdown</div>
+            <div className="text-[10px] font-semibold text-slate-400">Updated today</div>
           </button>
           <div className="flex gap-1.5">
-            <button onClick={openInsights} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500 transition active:scale-90"><BarsIcon/></button>
-            <button onClick={openWeather} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-400 transition active:scale-90"><TrophyIcon/></button>
+            <button onClick={openInsights} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500 active:scale-90"><BarsIcon/></button>
+            <button onClick={openWeather} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-400 active:scale-90"><TrophyIcon/></button>
           </div>
         </div>
-        <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl border-l-4 border-emerald-500 bg-emerald-50 px-3 py-1.5 text-slate-900">
+        {/* Weather banner */}
+        <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl border-l-4 border-emerald-500 bg-emerald-50 px-3 py-1.5">
           <span className="text-xl">☀️</span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-emerald-600">Clear Skies</span>
-              <button onClick={openWeather} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Edit</button>
+              <div className="flex gap-1">
+                <button onClick={openWeather} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 active:scale-95">Edit</button>
+                <button className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 active:scale-95">Undo</button>
+              </div>
             </div>
-            <p className="text-[11px] font-medium text-emerald-700 truncate">{userName?"Hey "+userName+"! ":""}Balance: <b>{balanceDisplay}</b></p>
+            <p className="text-[11px] font-medium text-emerald-700 truncate">After Rent + 1 expense, you'll have <b>{today}</b> left</p>
           </div>
         </div>
-        <div className="grid grid-cols-7 bg-white" style={{borderBottom:"1px solid #e2e8f0"}}>
+        {/* Day-of-week headers */}
+        <div className="grid grid-cols-7" style={{borderBottom:"1px solid #e2e8f0",borderTop:"1px solid #f1f5f9"}}>
           {dows.map(d=><div key={d} className="py-1.5 text-center text-[11px] font-semibold text-slate-400">{d}</div>)}
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{paddingBottom:"80px"}} onScroll={handleScroll}>
+        {/* Scrollable months */}
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 88px)"}} onScroll={handleScroll}>
           {months.map(({year,month})=>{
             const isCur=now.getFullYear()===year&&now.getMonth()===month;
             const firstDay=(new Date(year,month,1).getDay()+6)%7;
@@ -434,22 +458,31 @@
             for(let i=0;i<firstDay;i++)cells.push({blank:true});
             for(let d=1;d<=daysInMonth;d++)cells.push({day:d});
             return(<div key={`${year}-${month}`}>
-              <div className="flex justify-center items-center py-2" style={{borderBottom:"1px solid #e2e8f0"}}>
-                <div className="flex items-center gap-1 rounded-full px-4 py-1" style={{background:"#f1f5f9"}}>
-                  <span className="text-sm font-bold text-slate-700">{label}</span>
-                  <span className="text-slate-400 text-xs ml-0.5">▾</span>
+              {/* Month label row */}
+              <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f1f5f9",background:"#fff"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"3px",background:"#f1f5f9",borderRadius:"999px",padding:"3px 14px"}}>
+                  <span style={{fontSize:"13px",fontWeight:"700",color:"#334155"}}>{label}</span>
+                  <span style={{fontSize:"11px",color:"#94a3b8"}}>▾</span>
                 </div>
               </div>
               <div className="grid grid-cols-7">
                 {cells.map((c,i)=>{
-                  if(c.blank)return<div key={i} style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"90px"}}/>;
-                  const liveEvs=(isCur?calendarEvents[c.day]:[])||[];
+                  if(c.blank)return<div key={i} style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"92px",background:"#fff"}}/>;
+                  const evs=(isCur?calendarEvents[c.day]:[])||[];
                   const isToday=isCur&&c.day===now.getDate();
-                  return(<button key={i} onClick={()=>onDayTap?.(month,c.day)} className="p-1 text-left align-top overflow-hidden transition active:bg-slate-50" style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"90px"}}>
-                    <span className={cx("grid h-7 w-7 place-items-center rounded-full text-sm font-bold",isToday?"bg-blue-500 text-white":"text-slate-800")}>{c.day}</span>
-                    <div className="mt-0.5 space-y-0.5">
-                      {liveEvs.slice(0,3).map((e,ki)=>(<div key={ki} className={cx("rounded border-l-2 px-1 py-0.5",e.color)}><div className="truncate text-[8px] font-semibold text-slate-800 leading-tight">{e.emoji} {e.label}</div><div className={cx("text-[8px] font-bold leading-none",e.amt>0?"text-emerald-600":"text-rose-500")}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div></div>))}
-                      {liveEvs.length>3&&<div className="text-[7px] text-slate-400 pl-0.5">+{liveEvs.length-3}</div>}
+                  const bal=isCur&&dayBalances[c.day]!=null?dayBalances[c.day]:null;
+                  return(<button key={i} onClick={()=>onDayTap?.(month,c.day)}
+                    style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"92px",padding:"4px",textAlign:"left",verticalAlign:"top",overflow:"hidden",background:"#fff",display:"block",width:"100%"}}>
+                    <span style={{display:"grid",placeItems:"center",height:"26px",width:"26px",borderRadius:"50%",fontSize:"13px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#1e293b"}}>{c.day}</span>
+                    {bal!==null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.1",marginTop:"1px"}}>{fmtBal(bal)}</div>}
+                    <div style={{marginTop:"2px",display:"flex",flexDirection:"column",gap:"2px"}}>
+                      {evs.slice(0,2).map((e,ki)=>(
+                        <div key={ki} style={{borderRadius:"4px",borderLeft:`2px solid`,borderLeftColor:e.amt>0?"#34d399":e.color?.includes("rose")?"#fb7185":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#a78bfa":e.color?.includes("sky")?"#38bdf8":"#94a3b8",background:e.amt>0?"#ecfdf5":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fffbeb":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc",padding:"2px 3px"}}>
+                          <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.2",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.emoji} {e.label}</div>
+                          <div style={{fontSize:"8px",fontWeight:"700",lineHeight:"1",color:e.amt>0?"#16a34a":"#e11d48"}}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div>
+                        </div>
+                      ))}
+                      {evs.length>2&&<div style={{fontSize:"7px",color:"#94a3b8",paddingLeft:"2px"}}>+{evs.length-2} more</div>}
                     </div>
                   </button>);
                 })}
