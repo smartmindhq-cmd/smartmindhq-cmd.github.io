@@ -372,19 +372,17 @@
     }
 
     // ── CalendarLive ──────────────────────────────────────
-    const MONTH_SHORT=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const MON_SHORT=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     function CalendarLive({openMenu,openCash,openInsights,openWeather,onDayTap,today="$0",balanceDisplay="$0",userName="",calendarEvents={},onScrollDir}){
       const dows=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
       const now=new Date();
       const scrollRef=useRef(null);
       const lastTop=useRef(0);
-      const CELL_H=96;
+      const CELL_H=88;
 
-      // Running balance carried day-by-day
+      // Running balance: accumulate future events (after today) from base
       const runBal=useMemo(()=>{
-        const BASE=7500;
-        let bal=BASE;
-        const map={};
+        const BASE=7500; let bal=BASE; const map={};
         for(let d=1;d<=31;d++){
           (calendarEvents[d]||[]).forEach(e=>{bal+=e.amt;});
           map[d]=Math.round(bal);
@@ -394,31 +392,26 @@
 
       const fmtBal=v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v}`;
 
+      // Months starting from CURRENT month (no previous month offset)
       const months=useMemo(()=>{
         const res=[];
-        for(let i=-1;i<15;i++){
+        for(let i=0;i<15;i++){
           const d=new Date(now.getFullYear(),now.getMonth()+i,1);
           res.push({year:d.getFullYear(),month:d.getMonth()});
         }
         return res;
       },[]);
 
-      // Auto-scroll to today on mount — use getBoundingClientRect so
-      // it works regardless of how many month sections come before
+      // Pure math scroll to show 1 row above today
       useEffect(()=>{
-        requestAnimationFrame(()=>{
-          const el=scrollRef.current;
-          if(!el)return;
-          const marker=el.querySelector('[data-scroll-here]');
-          if(!marker)return;
-          const elTop=el.getBoundingClientRect().top;
-          const mTop=marker.getBoundingClientRect().top;
-          el.scrollTop=Math.max(0,el.scrollTop+(mTop-elTop)-CELL_H);
-        });
+        const el=scrollRef.current; if(!el)return;
+        const fd=(new Date(now.getFullYear(),now.getMonth(),1).getDay()+6)%7;
+        const todayRow=Math.floor((fd+now.getDate()-1)/7);
+        el.scrollTop=Math.max(0,(todayRow-1)*CELL_H);
       },[]);
 
       const handleScroll=()=>{
-        const el=scrollRef.current;if(!el)return;
+        const el=scrollRef.current; if(!el)return;
         const st=el.scrollTop;
         if(Math.abs(st-lastTop.current)>8){
           onScrollDir?.(st>lastTop.current?"up":"down");
@@ -426,126 +419,124 @@
         }
       };
 
-      // Budget label for sunday cells (dowIdx 6)
-      const getBudget=(dowIdx,day,dim)=>{
-        if(dowIdx!==6)return null;
-        const wk=Math.ceil(day/7);
+      const getBudget=(col,day,dim)=>{
+        if(col!==6)return null;
         const isLast=day+7>dim;
-        if(isLast)return{line1:"Budget end",line2:null,line3:null};
-        if(wk%2===0)return{line1:"Budget end",line2:"Set budget",line3:"Remaining $0"};
-        return{line1:"Budget start",line2:"Set budget",line3:null};
+        const wk=Math.ceil(day/7);
+        if(isLast)return["Budget end",null,null];
+        if(wk%2===0)return["Budget end","Set budget","Remaining $0"];
+        return["Budget start","Set budget",null];
       };
 
-      // Show balance: on event days, Sat, Sun, today
-      const showBal=(isCur,day,evs,dowIdx)=>{
-        if(!isCur)return false;
-        return evs.length>0||dowIdx===5||dowIdx===6;
-      };
+      const BD="1px solid #f0f0f0";
+      const CS={borderBottom:BD,borderRight:BD,minHeight:`${CELL_H}px`,padding:"4px 3px 2px",textAlign:"left",background:"#fff",display:"block",width:"100%",overflow:"hidden",boxSizing:"border-box"};
 
-      const BD="1px solid #efefef";
-      const cellBase={borderBottom:BD,borderRight:BD,minHeight:`${CELL_H}px`,padding:"5px 4px 3px",textAlign:"left",background:"#fff",display:"block",width:"100%",overflow:"hidden",boxSizing:"border-box"};
+      return(
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",background:"#fff"}}>
 
-      return(<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",background:"#fff"}}>
-
-        {/* ── Top Bar ── */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`calc(env(safe-area-inset-top,0px) + 8px) 10px 6px`}}>
-          <div style={{display:"flex",gap:"5px"}}>
-            <button onClick={openMenu} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#1e293b"}}><MenuIcon/></button>
-            <button style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#64748b"}}><ChatIcon/></button>
+        {/* TOP BAR */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 10px 5px",paddingTop:"calc(env(safe-area-inset-top,0px) + 8px)"}}>
+          <div style={{display:"flex",gap:"6px"}}>
+            <button onClick={openMenu} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f3f4f6",display:"grid",placeItems:"center"}}><MenuIcon/></button>
+            <button style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f3f4f6",display:"grid",placeItems:"center",color:"#6b7280"}}><ChatIcon/></button>
           </div>
-          <button onClick={openCash} style={{borderRadius:"999px",background:"#f4f4f5",padding:"5px 20px",textAlign:"center",lineHeight:"1"}}>
-            <div style={{fontSize:"19px",fontWeight:"800",color:"#0f172a"}}>{today}</div>
-            <div style={{fontSize:"10px",fontWeight:"500",color:"#94a3b8",marginTop:"1px"}}>Updated 3 days ago</div>
+          <button onClick={openCash} style={{background:"#f3f4f6",borderRadius:"999px",padding:"5px 22px",textAlign:"center"}}>
+            <div style={{fontSize:"20px",fontWeight:"800",color:"#111827",lineHeight:"1.1"}}>{today}</div>
+            <div style={{fontSize:"10px",color:"#9ca3af",fontWeight:"500",marginTop:"1px"}}>Updated 3 days ago</div>
           </button>
-          <div style={{display:"flex",gap:"5px"}}>
-            <button onClick={openInsights} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#64748b"}}><BarsIcon/></button>
-            <button onClick={openWeather} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f4f4f5",display:"grid",placeItems:"center",color:"#94a3b8"}}><TrophyIcon/></button>
+          <div style={{display:"flex",gap:"6px"}}>
+            <button onClick={openInsights} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f3f4f6",display:"grid",placeItems:"center",color:"#6b7280"}}><BarsIcon/></button>
+            <button onClick={openWeather} style={{width:"38px",height:"38px",borderRadius:"12px",background:"#f3f4f6",display:"grid",placeItems:"center",color:"#9ca3af"}}><TrophyIcon/></button>
           </div>
         </div>
 
-        {/* ── Clear Skies Banner ── */}
-        <div style={{margin:"0 10px 5px",borderRadius:"14px",borderLeft:"4px solid #22c55e",background:"#f0fdf4",padding:"7px 10px",display:"flex",alignItems:"flex-start",gap:"8px"}}>
-          <span style={{fontSize:"18px",lineHeight:"1.2"}}>☀️</span>
+        {/* CLEAR SKIES BANNER */}
+        <div style={{margin:"0 10px 6px",background:"#f0fdf4",borderRadius:"14px",borderLeft:"4px solid #22c55e",padding:"7px 10px 7px 10px",display:"flex",gap:"8px",alignItems:"flex-start"}}>
+          <span style={{fontSize:"20px",lineHeight:"1"}}>☀️</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"2px"}}>
-              <span style={{fontSize:"12px",fontWeight:"700",color:"#16a34a"}}>Clear Skies</span>
-              <button onClick={openWeather} style={{borderRadius:"999px",background:"#dcfce7",padding:"2px 10px",fontSize:"10px",fontWeight:"600",color:"#15803d",flexShrink:0}}>Edit</button>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"3px"}}>
+              <span style={{fontSize:"13px",fontWeight:"700",color:"#16a34a"}}>Clear Skies</span>
+              <button onClick={openWeather} style={{fontSize:"11px",fontWeight:"600",color:"#15803d",background:"#dcfce7",borderRadius:"999px",padding:"2px 10px"}}>Edit</button>
             </div>
-            <p style={{margin:0,fontSize:"11px",color:"#15803d",lineHeight:"1.35",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>After 🏠 Rent + 1 expense on Jun 3, you'll have <b>$6k</b> left</p>
+            <div style={{fontSize:"11px",color:"#15803d",lineHeight:"1.4",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>After 🏠 Rent + 1 expense on Jun 3, you'll have <b>$6k</b> left</div>
           </div>
         </div>
 
-        {/* ── Day-of-week headers ── */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e8e8e8"}}>
-          {dows.map(d=><div key={d} style={{padding:"4px 0",textAlign:"center",fontSize:"11px",fontWeight:"600",color:"#9ca3af"}}>{d}</div>)}
+        {/* DAY HEADERS */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e5e7eb"}}>
+          {dows.map(d=><div key={d} style={{textAlign:"center",fontSize:"11px",fontWeight:"600",color:"#9ca3af",padding:"3px 0"}}>{d}</div>)}
         </div>
 
-        {/* ── Scrollable calendar ── */}
-        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 92px)"}} onScroll={handleScroll}>
+        {/* CALENDAR SCROLL AREA */}
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 90px)"}} onScroll={handleScroll}>
           {months.map(({year,month},mi)=>{
-            const isCur=now.getFullYear()===year&&now.getMonth()===month;
-            const firstDay=(new Date(year,month,1).getDay()+6)%7;
+            const isCur=year===now.getFullYear()&&month===now.getMonth();
+            const fd=(new Date(year,month,1).getDay()+6)%7; // blanks before day 1
             const dim=new Date(year,month+1,0).getDate();
             const label=new Date(year,month,1).toLocaleString("default",{month:"long",year:"numeric"});
             const cells=[];
-            for(let i=0;i<firstDay;i++)cells.push({blank:true});
-            for(let d=1;d<=dim;d++){
-              const col=(firstDay+d-1)%7;
-              cells.push({day:d,col});
-            }
-            // Today's row index inside this month section (for auto-scroll)
-            const todayCol=(firstDay+now.getDate()-1)%7;
-            const todayAbsIdx=firstDay+now.getDate()-1;
-            const todayRowStart=Math.floor(todayAbsIdx/7)*7;
+            for(let i=0;i<fd;i++)cells.push(null); // null = blank
+            for(let d=1;d<=dim;d++)cells.push(d);
 
             return(
               <div key={`${year}-${month}`} style={{position:"relative"}}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-                  {cells.map((c,i)=>{
-                    const isScrollAnchor=isCur&&i===todayRowStart;
-                    if(c.blank)return<div key={i} data-scroll-here={isScrollAnchor?"1":undefined} style={{...cellBase,background:"#fff"}}/>;
-                    const isToday=isCur&&c.day===now.getDate();
-                    const isFirstOfMonth=c.day===1;
-                    const evs=(isCur?calendarEvents[c.day]:[])||[];
-                    const budget=getBudget(c.col,c.day,dim);
-                    const needsBal=showBal(isCur,c.day,evs,c.col);
-                    const balVal=isCur?runBal[c.day]:null;
-                    const noTxToday=isCur&&isToday&&evs.length===0;
-                    const borderC=(e)=>{const isInc=e.amt>0;return isInc?"#4ade80":e.color?.includes("rose")?"#f87171":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#c084fc":e.color?.includes("sky")?"#38bdf8":"#94a3b8";};
-                    const bgC=(e)=>{const isInc=e.amt>0;return isInc?"#f0fdf4":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fefce8":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc";};
+                  {cells.map((day,i)=>{
+                    const col=i%7; // 0=Mon…6=Sun
+                    if(day===null)return<div key={i} style={CS}/>;
+                    const isToday=isCur&&day===now.getDate();
+                    const isPast=isCur&&day<now.getDate();
+                    const evs=(isCur?calendarEvents[day]:[])||[];
+                    const balV=isCur?runBal[day]:null;
+                    const showBalNum=isCur&&!isPast&&(evs.length>0||col===5||col===6)&&balV!=null;
+                    const isFirstOfNewMonth=day===1&&mi>0;
+                    const budget=getBudget(col,day,dim);
+
+                    const evBorderColor=e=>{
+                      if(e.amt>0)return"#4ade80";
+                      if(e.color?.includes("rose"))return"#f87171";
+                      if(e.color?.includes("amber"))return"#fbbf24";
+                      if(e.color?.includes("purple"))return"#c084fc";
+                      if(e.color?.includes("sky"))return"#38bdf8";
+                      return"#94a3b8";
+                    };
+                    const evBgColor=e=>{
+                      if(e.amt>0)return"#f0fdf4";
+                      if(e.color?.includes("rose"))return"#fff1f2";
+                      if(e.color?.includes("amber"))return"#fefce8";
+                      if(e.color?.includes("purple"))return"#faf5ff";
+                      if(e.color?.includes("sky"))return"#f0f9ff";
+                      return"#f9fafb";
+                    };
+
                     return(
-                      <button key={i} data-scroll-here={isScrollAnchor?"1":undefined} onClick={()=>onDayTap?.(month,c.day)} style={cellBase}>
-                        {/* Month name on first day of new month */}
-                        {isFirstOfMonth&&mi>0&&<div style={{fontSize:"8px",fontWeight:"600",color:"#94a3b8",lineHeight:"1",marginBottom:"1px"}}>{MONTH_SHORT[month]}</div>}
-                        {/* Day number */}
-                        <span style={{display:"inline-grid",placeItems:"center",height:"22px",width:"22px",borderRadius:"50%",fontSize:"12px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#111827",flexShrink:0}}>{c.day}</span>
-                        {/* Balance */}
-                        {noTxToday&&<div style={{fontSize:"9px",color:"#9ca3af",lineHeight:"1.3",marginTop:"1px"}}>$0</div>}
-                        {!noTxToday&&needsBal&&balVal!=null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.3",marginTop:"1px"}}>{fmtBal(balVal)}</div>}
-                        {/* Event cards */}
-                        <div style={{display:"flex",flexDirection:"column",gap:"2px",marginTop:"2px"}}>
+                      <button key={i} onClick={()=>onDayTap?.(month,day)} style={CS}>
+                        {isFirstOfNewMonth&&<div style={{fontSize:"8px",fontWeight:"600",color:"#9ca3af",lineHeight:"1.2"}}>{MON_SHORT[month]}</div>}
+                        <span style={{display:"inline-grid",placeItems:"center",height:"23px",width:"23px",borderRadius:"50%",fontSize:"13px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#111827"}}>{day}</span>
+                        {isToday&&evs.length===0&&<div style={{fontSize:"9px",color:"#9ca3af",marginTop:"1px"}}>$0</div>}
+                        {showBalNum&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.2",marginTop:"1px"}}>{fmtBal(balV)}</div>}
+                        <div style={{marginTop:"2px",display:"flex",flexDirection:"column",gap:"2px"}}>
                           {evs.slice(0,2).map((e,ki)=>(
-                            <div key={ki} style={{borderRadius:"4px",borderLeft:`2px solid ${borderC(e)}`,background:bgC(e),padding:"2px 3px",overflow:"hidden"}}>
+                            <div key={ki} style={{borderRadius:"4px",borderLeft:`2px solid ${evBorderColor(e)}`,background:evBgColor(e),padding:"2px 3px",overflow:"hidden"}}>
                               <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.3",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.emoji} {e.label}</div>
                               <div style={{fontSize:"8px",fontWeight:"700",lineHeight:"1",color:e.amt>0?"#16a34a":"#ef4444"}}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div>
                             </div>
                           ))}
                           {evs.length>2&&<div style={{fontSize:"7px",color:"#9ca3af"}}>+{evs.length-2}</div>}
                         </div>
-                        {/* Budget text on Sundays */}
-                        {budget&&<div style={{marginTop:"3px"}}>
-                          <div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.5"}}>{budget.line1}</div>
-                          {budget.line2&&<div style={{fontSize:"7px",color:"#6b7280",lineHeight:"1.5"}}>{budget.line2}</div>}
-                          {budget.line3&&<div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.5"}}>{budget.line3}</div>}
+                        {budget&&<div style={{marginTop:"2px"}}>
+                          <div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.6"}}>{budget[0]}</div>
+                          {budget[1]&&<div style={{fontSize:"7px",color:"#6b7280",lineHeight:"1.6"}}>{budget[1]}</div>}
+                          {budget[2]&&<div style={{fontSize:"7px",color:"#9ca3af",lineHeight:"1.6"}}>{budget[2]}</div>}
                         </div>}
                       </button>
                     );
                   })}
                 </div>
-                {/* Floating month label — centered on first row */}
-                <div style={{position:"absolute",top:`${CELL_H/2}px`,left:"50%",transform:"translate(-50%,-50%)",zIndex:4,pointerEvents:"none",display:"flex",alignItems:"center",gap:"4px",background:"rgba(255,255,255,0.97)",borderRadius:"999px",padding:"5px 16px",boxShadow:"0 1px 10px rgba(0,0,0,0.12)",whiteSpace:"nowrap"}}>
+                {/* Floating month label pill — sits in vertical center of first row */}
+                <div style={{position:"absolute",top:`${CELL_H/2}px`,left:"50%",transform:"translate(-50%,-50%)",zIndex:5,pointerEvents:"none",background:"rgba(255,255,255,0.95)",borderRadius:"999px",padding:"5px 18px",boxShadow:"0 2px 12px rgba(0,0,0,0.14)",display:"flex",alignItems:"center",gap:"5px",whiteSpace:"nowrap"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"#374151"}}>{label}</span>
-                  <span style={{fontSize:"11px",color:"#9ca3af"}}>▾</span>
+                  <span style={{fontSize:"12px",color:"#9ca3af"}}>▾</span>
                 </div>
               </div>
             );
