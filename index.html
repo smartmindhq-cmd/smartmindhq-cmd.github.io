@@ -265,7 +265,7 @@
     function DownloadIcon(){return<svg {...ICON}><path d="M12 3v12M7 11l5 5 5-5M4 20h16"/></svg>;}
     function SunIcon(){return<svg {...ICON}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>;}
     function CalendarIcon(){return<svg {...ICON}><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>{[8,12,16].map(x=>[12,16].map(y=><circle key={`${x}-${y}`} cx={x} cy={y} r="0.6" fill="currentColor" stroke="none"/>))}</svg>;}
-    function PieIcon(){return<svg {...ICON}><path d="M12 3a9 9 0 1 0 9 9h-9V3z"/><path d="M12 3v9h9" opacity="0.35"/></svg>;}
+    function ClockIcon(){return<svg {...ICON}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>;}
     function PlusIcon(){return<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>;}
     function GridIcon(){return<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">{[5,12,19].map(x=>[5,12,19].map(y=><circle key={`${x}-${y}`} cx={x} cy={y} r="1.6"/>))}</svg>;}
     function CardIcon(){return<svg {...ICON}><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h6"/></svg>;}
@@ -275,7 +275,7 @@
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:20,display:"flex",justifyContent:"center",paddingBottom:"env(safe-area-inset-bottom,0px)",pointerEvents:"none",transform:visible?"translateY(0)":"translateY(120%)",opacity:visible?1:0,transition:"transform 0.32s cubic-bezier(0.4,0,0.2,1),opacity 0.32s ease"}}>
           <div className="flex items-center justify-between rounded-full bg-white px-3 py-2 shadow-[0_8px_32px_rgba(0,0,0,0.18)] ring-1 ring-black/6 pointer-events-auto" style={{width:"88%",maxWidth:"360px"}}>
             <DockBtn label="calendar" active={active==="home"} onClick={()=>onSelect("home")}><CalendarIcon/></DockBtn>
-            <DockBtn label="insights" active={active==="insights"} onClick={()=>onSelect("insights")}><PieIcon/></DockBtn>
+            <DockBtn label="history" active={active==="history"} onClick={()=>onSelect("history")}><ClockIcon/></DockBtn>
             <button onClick={onAdd} aria-label="Add" className="mx-1 grid h-14 w-14 place-items-center rounded-full bg-[#5b7cfa] text-white shadow-lg active:scale-90" style={{transition:"transform 0.25s cubic-bezier(0.34,1.56,0.64,1)",transform:addOpen?"rotate(45deg)":"rotate(0deg)"}}><PlusIcon/></button>
             <DockBtn label="debt" active={active==="debt"} onClick={()=>onSelect("debt")}><GridIcon/></DockBtn>
             <DockBtn label="goals" active={active==="goals"} onClick={()=>onSelect("goals")}><CardIcon/></DockBtn>
@@ -377,117 +377,150 @@
       const now=new Date();
       const scrollRef=useRef(null);
       const lastTop=useRef(0);
+      const todayRowRef=useRef(null);
+      const CELL_H=90;
 
-      // Running balance per day for current month
+      // Auto-scroll to today's row on first render
+      useEffect(()=>{
+        if(scrollRef.current&&todayRowRef.current){
+          const offset=todayRowRef.current.offsetTop;
+          scrollRef.current.scrollTop=Math.max(0,offset-CELL_H);
+        }
+      },[]);
+
+      // Running balance per day (current month only)
       const dayBalances=useMemo(()=>{
         const BASE=7500;
         let bal=BASE;
         const map={};
         for(let d=1;d<=31;d++){
           const evs=calendarEvents[d]||[];
-          if(evs.length>0){
-            evs.forEach(e=>{bal+=e.amt;});
-            map[d]=bal;
-          }
+          evs.forEach(e=>{bal+=e.amt;});
+          if(evs.length>0) map[d]=bal;
         }
         return map;
       },[calendarEvents]);
 
       const fmtBal=v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${Math.round(v)}`;
 
+      // Budget helper text for Sundays (index 6 in Mon=0 scheme)
+      const budgetLabel=(dowIdx,day,dim)=>{
+        if(dowIdx!==6)return null;
+        const isLast=day+7>dim;
+        const isFirst=day<=7;
+        if(isLast||(!isFirst&&Math.floor(day/7)%2===0))return"Budget end";
+        return"Budget start";
+      };
+
       const months=useMemo(()=>{
-        const result=[];
-        for(let i=0;i<12;i++){
+        const res=[];
+        for(let i=-1;i<14;i++){
           const d=new Date(now.getFullYear(),now.getMonth()+i,1);
-          result.push({year:d.getFullYear(),month:d.getMonth()});
+          res.push({year:d.getFullYear(),month:d.getMonth()});
         }
-        return result;
+        return res;
       },[]);
 
       const handleScroll=()=>{
         const el=scrollRef.current;if(!el)return;
         const st=el.scrollTop;
-        if(Math.abs(st-lastTop.current)>4){
+        if(Math.abs(st-lastTop.current)>6){
           onScrollDir?.(st>lastTop.current?"up":"down");
           lastTop.current=st;
         }
       };
 
-      return(<div className="bg-white" style={{position:"absolute",inset:0,display:"flex",flexDirection:"column"}}>
+      const S={
+        cell:{borderBottom:"1px solid #f0f0f0",borderRight:"1px solid #f0f0f0",minHeight:`${CELL_H}px`,padding:"4px 3px",textAlign:"left",background:"#fff",display:"block",width:"100%",verticalAlign:"top",overflow:"hidden"},
+        blank:{borderBottom:"1px solid #f0f0f0",borderRight:"1px solid #f0f0f0",minHeight:`${CELL_H}px`,background:"#fff"},
+      };
+
+      return(<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",background:"#fff"}}>
         {/* Top bar */}
-        <div className="flex items-center justify-between px-3 pb-1" style={{paddingTop:"calc(env(safe-area-inset-top,0px) + 10px)"}}>
-          <div className="flex gap-1.5">
-            <button onClick={openMenu} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 active:scale-90"><MenuIcon/></button>
-            <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500"><ChatIcon/></div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px 4px",paddingTop:"calc(env(safe-area-inset-top,0px) + 10px)"}}>
+          <div style={{display:"flex",gap:"6px"}}>
+            <button onClick={openMenu} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9"}}><MenuIcon/></button>
+            <div style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#64748b"}}><ChatIcon/></div>
           </div>
-          <button onClick={openCash} className="rounded-full bg-slate-100 px-4 py-1.5 text-center active:scale-95">
-            <div className="text-lg font-extrabold leading-none text-slate-900">{today}</div>
-            <div className="text-[10px] font-semibold text-slate-400">Updated today</div>
+          <button onClick={openCash} style={{borderRadius:"999px",background:"#f1f5f9",padding:"6px 18px",textAlign:"center"}}>
+            <div style={{fontSize:"18px",fontWeight:"800",lineHeight:"1.1",color:"#0f172a"}}>{today}</div>
+            <div style={{fontSize:"10px",fontWeight:"600",color:"#94a3b8",lineHeight:"1"}}>Updated 3 days ago</div>
           </button>
-          <div className="flex gap-1.5">
-            <button onClick={openInsights} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-500 active:scale-90"><BarsIcon/></button>
-            <button onClick={openWeather} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-slate-400 active:scale-90"><TrophyIcon/></button>
+          <div style={{display:"flex",gap:"6px"}}>
+            <button onClick={openInsights} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#64748b"}}><BarsIcon/></button>
+            <button onClick={openWeather} style={{display:"grid",placeItems:"center",height:"40px",width:"40px",borderRadius:"50%",background:"#f1f5f9",color:"#94a3b8"}}><TrophyIcon/></button>
           </div>
         </div>
         {/* Weather banner */}
-        <div className="mx-3 mb-1 flex items-center gap-2 rounded-2xl border-l-4 border-emerald-500 bg-emerald-50 px-3 py-1.5">
-          <span className="text-xl">☀️</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-emerald-600">Clear Skies</span>
-              <div className="flex gap-1">
-                <button onClick={openWeather} className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 active:scale-95">Edit</button>
-                <button className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 active:scale-95">Undo</button>
-              </div>
+        <div style={{margin:"0 10px 6px",display:"flex",alignItems:"center",gap:"8px",borderRadius:"16px",borderLeft:"4px solid #10b981",background:"#ecfdf5",padding:"8px 10px"}}>
+          <span style={{fontSize:"20px"}}>☀️</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:"12px",fontWeight:"800",color:"#059669"}}>Clear Skies</span>
+              <button onClick={openWeather} style={{borderRadius:"999px",background:"#d1fae5",padding:"2px 8px",fontSize:"10px",fontWeight:"600",color:"#065f46"}}>Edit</button>
             </div>
-            <p className="text-[11px] font-medium text-emerald-700 truncate">After Rent + 1 expense, you'll have <b>{today}</b> left</p>
+            <p style={{fontSize:"11px",color:"#047857",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>After 🏠 Rent + 1 expense on Jun 3, you'll have <b>{today}</b> left</p>
           </div>
         </div>
-        {/* Day-of-week headers */}
-        <div className="grid grid-cols-7" style={{borderBottom:"1px solid #e2e8f0",borderTop:"1px solid #f1f5f9"}}>
-          {dows.map(d=><div key={d} className="py-1.5 text-center text-[11px] font-semibold text-slate-400">{d}</div>)}
+        {/* Day headers */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e2e8f0"}}>
+          {dows.map(d=><div key={d} style={{padding:"5px 0",textAlign:"center",fontSize:"11px",fontWeight:"600",color:"#94a3b8"}}>{d}</div>)}
         </div>
-        {/* Scrollable months */}
-        <div ref={scrollRef} style={{flex:1,overflowY:"auto",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 88px)"}} onScroll={handleScroll}>
+        {/* Calendar scroll */}
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 90px)"}} onScroll={handleScroll}>
           {months.map(({year,month})=>{
             const isCur=now.getFullYear()===year&&now.getMonth()===month;
             const firstDay=(new Date(year,month,1).getDay()+6)%7;
-            const daysInMonth=new Date(year,month+1,0).getDate();
+            const dim=new Date(year,month+1,0).getDate();
             const label=new Date(year,month,1).toLocaleString("default",{month:"long",year:"numeric"});
             const cells=[];
             for(let i=0;i<firstDay;i++)cells.push({blank:true});
-            for(let d=1;d<=daysInMonth;d++)cells.push({day:d});
-            return(<div key={`${year}-${month}`}>
-              {/* Month label row */}
-              <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f1f5f9",background:"#fff"}}>
-                <div style={{display:"flex",alignItems:"center",gap:"3px",background:"#f1f5f9",borderRadius:"999px",padding:"3px 14px"}}>
+            for(let d=1;d<=dim;d++)cells.push({day:d,dowIdx:(firstDay+d-1)%7});
+            // Find which row-index today is in (for scroll ref)
+            const todayRowIdx=isCur?Math.floor((firstDay+now.getDate()-1)/7):null;
+            return(
+              <div key={`${year}-${month}`} style={{position:"relative"}}>
+                {/* Grid */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+                  {cells.map((c,i)=>{
+                    if(c.blank)return<div key={i} style={S.blank}/>;
+                    const rowIdx=Math.floor(i/7);
+                    const isToday=isCur&&c.day===now.getDate();
+                    const evs=(isCur?calendarEvents[c.day]:[])||[];
+                    const bal=isCur&&dayBalances[c.day]!=null?dayBalances[c.day]:null;
+                    const bLabel=budgetLabel(c.dowIdx,c.day,dim);
+                    const rowRef=(rowIdx===todayRowIdx)?{ref:todayRowRef}:{};
+                    return(
+                      <button key={i} {...rowRef} onClick={()=>onDayTap?.(month,c.day)} style={S.cell}>
+                        <span style={{display:"inline-grid",placeItems:"center",height:"24px",width:"24px",borderRadius:"50%",fontSize:"12px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#1e293b"}}>{c.day}</span>
+                        {bal!==null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.2",marginTop:"1px"}}>{fmtBal(bal)}</div>}
+                        <div style={{display:"flex",flexDirection:"column",gap:"2px",marginTop:"2px"}}>
+                          {evs.slice(0,2).map((e,ki)=>{
+                            const isInc=e.amt>0;
+                            const borderC=isInc?"#34d399":e.color?.includes("rose")?"#fb7185":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#a78bfa":e.color?.includes("sky")?"#38bdf8":"#94a3b8";
+                            const bgC=isInc?"#ecfdf5":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fffbeb":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc";
+                            return(<div key={ki} style={{borderRadius:"3px",borderLeft:`2px solid ${borderC}`,background:bgC,padding:"1px 3px"}}>
+                              <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.3",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.emoji} {e.label}</div>
+                              <div style={{fontSize:"8px",fontWeight:"700",color:isInc?"#16a34a":"#e11d48",lineHeight:"1"}}>{isInc?"+":""}{fmt(Math.abs(e.amt))}</div>
+                            </div>);
+                          })}
+                          {evs.length>2&&<div style={{fontSize:"7px",color:"#94a3b8"}}>+{evs.length-2}</div>}
+                        </div>
+                        {bLabel&&evs.length===0&&<div style={{marginTop:"auto",paddingTop:"4px"}}>
+                          <div style={{fontSize:"7px",color:"#94a3b8",lineHeight:"1.4"}}>{bLabel}</div>
+                          {bLabel==="Budget start"&&<div style={{fontSize:"7px",color:"#3b82f6",lineHeight:"1.4"}}>Set budget</div>}
+                        </div>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Month label floating over first row, centered */}
+                <div style={{position:"absolute",top:`${CELL_H/2}px`,left:"50%",transform:"translate(-50%,-50%)",zIndex:5,pointerEvents:"none",display:"flex",alignItems:"center",gap:"4px",background:"rgba(255,255,255,0.96)",borderRadius:"999px",padding:"4px 16px",boxShadow:"0 2px 12px rgba(0,0,0,0.13)",whiteSpace:"nowrap"}}>
                   <span style={{fontSize:"13px",fontWeight:"700",color:"#334155"}}>{label}</span>
-                  <span style={{fontSize:"11px",color:"#94a3b8"}}>▾</span>
+                  <span style={{fontSize:"12px",color:"#94a3b8"}}>▾</span>
                 </div>
               </div>
-              <div className="grid grid-cols-7">
-                {cells.map((c,i)=>{
-                  if(c.blank)return<div key={i} style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"92px",background:"#fff"}}/>;
-                  const evs=(isCur?calendarEvents[c.day]:[])||[];
-                  const isToday=isCur&&c.day===now.getDate();
-                  const bal=isCur&&dayBalances[c.day]!=null?dayBalances[c.day]:null;
-                  return(<button key={i} onClick={()=>onDayTap?.(month,c.day)}
-                    style={{borderBottom:"1px solid #f1f5f9",borderRight:"1px solid #f1f5f9",minHeight:"92px",padding:"4px",textAlign:"left",verticalAlign:"top",overflow:"hidden",background:"#fff",display:"block",width:"100%"}}>
-                    <span style={{display:"grid",placeItems:"center",height:"26px",width:"26px",borderRadius:"50%",fontSize:"13px",fontWeight:"700",background:isToday?"#3b82f6":"transparent",color:isToday?"#fff":"#1e293b"}}>{c.day}</span>
-                    {bal!==null&&<div style={{fontSize:"9px",fontWeight:"800",color:"#3b82f6",lineHeight:"1.1",marginTop:"1px"}}>{fmtBal(bal)}</div>}
-                    <div style={{marginTop:"2px",display:"flex",flexDirection:"column",gap:"2px"}}>
-                      {evs.slice(0,2).map((e,ki)=>(
-                        <div key={ki} style={{borderRadius:"4px",borderLeft:`2px solid`,borderLeftColor:e.amt>0?"#34d399":e.color?.includes("rose")?"#fb7185":e.color?.includes("amber")?"#fbbf24":e.color?.includes("purple")?"#a78bfa":e.color?.includes("sky")?"#38bdf8":"#94a3b8",background:e.amt>0?"#ecfdf5":e.color?.includes("rose")?"#fff1f2":e.color?.includes("amber")?"#fffbeb":e.color?.includes("purple")?"#faf5ff":e.color?.includes("sky")?"#f0f9ff":"#f8fafc",padding:"2px 3px"}}>
-                          <div style={{fontSize:"8px",fontWeight:"600",color:"#1e293b",lineHeight:"1.2",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.emoji} {e.label}</div>
-                          <div style={{fontSize:"8px",fontWeight:"700",lineHeight:"1",color:e.amt>0?"#16a34a":"#e11d48"}}>{e.amt>0?"+":""}{fmt(Math.abs(e.amt))}</div>
-                        </div>
-                      ))}
-                      {evs.length>2&&<div style={{fontSize:"7px",color:"#94a3b8",paddingLeft:"2px"}}>+{evs.length-2} more</div>}
-                    </div>
-                  </button>);
-                })}
-              </div>
-            </div>);
+            );
           })}
         </div>
       </div>);
